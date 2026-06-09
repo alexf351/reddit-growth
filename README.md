@@ -16,7 +16,7 @@ threads to out-answer.
 - **No fabricated data.** Any integration without creds renders
   `NO DATA — needs creds` instead of fake numbers.
 - **No silent list changes.** Competitor mining only *suggests* subreddits /
-  keywords; you approve before anything is added.
+  keywords; you approve in the app before anything is used.
 - Creds live in `.env.local` (gitignored). `.env.example` documents every var.
 
 ## Stack
@@ -25,27 +25,57 @@ Next.js (App Router) + TypeScript · Supabase (`reddit_`-prefixed tables) ·
 Tailwind v4 · Vercel Cron · Reddit official API · Gemini or Claude (configurable)
 · Resend digest.
 
+## How it works
+
+```
+ingest ─▶ score ─▶ triage inbox  (rank + filter + mark commented/saved/dismissed)
+   ▲         ▲            │
+   │      signals         └─▶ item page ─▶ drafts (copy, never posted)
+   │     (competitor /
+   │      saturation)
+mine competitors ─▶ sub map · cadence · question patterns
+                 ├─▶ suggestions (you approve → merged into ingest)
+                 └─▶ competitor-present threads injected into the queue
+rules ─▶ per-subreddit self-promo flag        digest ─▶ daily email (top N + competitor activity)
+```
+
 ## Getting started
 
 ```bash
 npm install
-cp .env.example .env.local   # then fill in creds (start with Reddit)
-npm run dev                  # http://localhost:3000 — shows integration status
+cp .env.example .env.local      # fill in creds (start with Reddit)
+npm run dev                     # http://localhost:3000
 ```
 
-### Reddit creds (P0)
+1. **Reddit (P0):** create a **script** app at <https://www.reddit.com/prefs/apps>,
+   put the id/secret in `.env.local` (`REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`).
+   Test: `npm run ingest:one -- ClaudeAI`.
+2. **Supabase (P1):** create a project, paste `SUPABASE_URL` +
+   `SUPABASE_SERVICE_ROLE_KEY`, and apply everything in `supabase/migrations/`
+   (SQL editor, `supabase db push`, or the Supabase MCP).
+3. **LLM (P2):** `LLM_PROVIDER=gemini` (+ `GEMINI_API_KEY`) or `claude`
+   (+ `ANTHROPIC_API_KEY`). Optional `LLM_MODEL` override.
+4. **Resend (P4):** `RESEND_API_KEY`, `DIGEST_FROM` (verified sender), `DIGEST_TO`.
 
-1. Go to <https://www.reddit.com/prefs/apps> → **create app** → type **script**.
-2. Copy the client id (under the app name) and secret into `.env.local`:
-   `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`.
-3. Test ingestion from the CLI:
+Then run the pipeline and open the inbox:
 
-   ```bash
-   npm run ingest:one            # first subreddit in config/targets.ts
-   npm run ingest:one -- ClaudeAI
-   ```
+```bash
+npm run pipeline                # ingest → score → mine
+```
 
-   Without creds this prints `NO DATA — needs creds` and exits cleanly.
+## Scripts
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` / `build` / `start` | Next.js dev / build / serve |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run ingest:one [sub]` | P0 single-subreddit ingest (console) |
+| `npm run ingest` | Full ingest: subs + keyword search + dedup → Supabase |
+| `npm run score [limit]` | Score unscored posts (relevance/intent/mention-fit) |
+| `npm run mine` | Mine competitor histories → threads + suggestions |
+| `npm run rules` | Refresh per-subreddit self-promo flags |
+| `npm run digest` | Send the daily Resend digest |
+| `npm run pipeline` | ingest → score → mine in one go |
 
 ## Configuration
 
@@ -53,23 +83,31 @@ Editable lists live in `config/`:
 
 - `targets.ts` — target subreddits, keywords, negative keywords.
 - `competitors.ts` — tracked competitor accounts (seed: `u/Simplilearn`).
-- `scoring.ts` — scoring weights, modifiers, and thresholds (one tunable place).
+- `scoring.ts` — weights, modifiers, thresholds (one tunable place).
+- `product.ts` — what Iro is + the draft voice (edit for accurate scoring).
 
-## Scripts
+## Deployment (Vercel + Supabase)
 
-| Command | What it does |
-| --- | --- |
-| `npm run dev` | Next.js dev server (status dashboard). |
-| `npm run build` | Production build. |
-| `npm run typecheck` | `tsc --noEmit`. |
-| `npm run ingest:one [sub]` | P0 end-to-end ingest of one subreddit (prints to console). |
+1. Import the repo into Vercel; add all `.env.local` vars as project env vars
+   (set `APP_URL` to the deployment URL and a random `CRON_SECRET`).
+2. Apply `supabase/migrations/` to your Supabase project.
+3. `vercel.json` defines the cron schedule (ingest every 4h, score every 4h,
+   mine daily, rules weekly, digest daily). Vercel sends
+   `Authorization: Bearer $CRON_SECRET` to the `/api/cron/*` routes.
 
-## Build phases
+   > **Plan note:** sub-daily crons and 60s function durations need Vercel
+   > **Pro**. On **Hobby**, reduce to daily crons (and large runs may need the
+   > `?limit=` bound on `/api/cron/score`). You can always run `npm run pipeline`
+   > manually instead.
 
-- **P0 — scaffold + Reddit OAuth + ingest one subreddit end-to-end.** ← current
-- P1 — full ingest (subs + keyword search) + dedup + Supabase storage.
-- P2 — scoring + triage inbox UI.
-- P3 — competitor comment-mining (sub map, patterns, cadence) + Competitor Intel page.
-- P4 — subreddit self-promo-rule flagging + Resend daily digest.
-- P5 — comment-draft generation.
-- P6 — scheduling + polish.
+## Cost
+
+Every LLM call's token usage is logged to `reddit_llm_usage`; cumulative totals
+show on `/status`. Control spend via `LLM_PROVIDER` / `LLM_MODEL`, the
+`/api/cron/score?limit=` bound, and the cron frequency in `vercel.json`.
+
+## Build phases (all shipped)
+
+P0 scaffold + Reddit OAuth · P1 ingest + storage · P2 scoring + triage inbox ·
+P3 competitor mining + Competitor Intel · P4 self-promo flags + digest ·
+P5 comment drafts · P6 scheduling + polish.

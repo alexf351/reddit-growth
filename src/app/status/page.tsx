@@ -2,6 +2,8 @@ import { credStatus } from "@/lib/env";
 import { competitors } from "@config/competitors";
 import { targets } from "@config/targets";
 import { llmProvider } from "@/lib/llm/provider";
+import { hasSupabaseCreds } from "@/lib/db/client";
+import { getRecentRuns, getUsageTotals, type IngestRunRecord, type UsageTotals } from "@/lib/db/repos";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +16,7 @@ function StatusDot({ ok }: { ok: boolean }) {
   );
 }
 
-export default function StatusPage() {
+export default async function StatusPage() {
   const creds = credStatus();
   const rows = [
     { label: "Reddit API", ok: creds.reddit, note: "REDDIT_CLIENT_ID / SECRET — P0" },
@@ -22,6 +24,16 @@ export default function StatusPage() {
     { label: `LLM (${llmProvider()})`, ok: creds.llm, note: "GEMINI_API_KEY or ANTHROPIC_API_KEY — P2" },
     { label: "Resend", ok: creds.resend, note: "RESEND_API_KEY — P4" },
   ];
+
+  let runs: IngestRunRecord[] = [];
+  let usage: UsageTotals | null = null;
+  if (creds.supabase) {
+    try {
+      [runs, usage] = await Promise.all([getRecentRuns(12), getUsageTotals()]);
+    } catch {
+      /* migrations not applied yet — leave activity empty */
+    }
+  }
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
@@ -52,6 +64,50 @@ export default function StatusPage() {
           ))}
         </ul>
       </section>
+
+      {usage && (
+        <section className="mb-10">
+          <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
+            LLM usage (cumulative)
+          </h2>
+          <div className="flex gap-6 rounded-lg border border-zinc-800 px-4 py-3 text-sm">
+            <span>
+              <span className="text-zinc-500">calls</span> {usage.calls}
+            </span>
+            <span>
+              <span className="text-zinc-500">tokens in</span> {usage.promptTokens.toLocaleString()}
+            </span>
+            <span>
+              <span className="text-zinc-500">tokens out</span> {usage.completionTokens.toLocaleString()}
+            </span>
+          </div>
+        </section>
+      )}
+
+      {runs.length > 0 && (
+        <section className="mb-10">
+          <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
+            Recent runs
+          </h2>
+          <ul className="divide-y divide-zinc-800 rounded-lg border border-zinc-800 text-sm">
+            {runs.map((r, i) => (
+              <li key={i} className="flex items-center justify-between px-4 py-2">
+                <span className="flex items-center gap-3">
+                  <StatusDot ok={r.status === "ok"} />
+                  <span className="font-medium">{r.kind}</span>
+                  <span className="text-xs text-zinc-500">
+                    {new Date(r.startedAt).toLocaleString()}
+                  </span>
+                </span>
+                <span className="text-xs text-zinc-500">
+                  {r.status}
+                  {r.counts ? ` · ${Object.entries(r.counts).map(([k, v]) => `${k}:${v}`).join(" ")}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="mb-10 grid gap-6 sm:grid-cols-2">
         <div className="rounded-lg border border-zinc-800 p-4">

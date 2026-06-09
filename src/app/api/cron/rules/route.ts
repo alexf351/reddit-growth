@@ -3,7 +3,7 @@ import { authorizeCron } from "@/lib/cron";
 import { runRulesRefresh } from "@/lib/rules";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 export async function GET(req: Request) {
   if (!authorizeCron(req)) {

@@ -702,3 +702,47 @@ export async function getDrafts(postId: string): Promise<DraftComment[]> {
   if (error) throw new Error(`getDrafts: ${error.message}`);
   return (data ?? []).map(rowToDraft);
 }
+
+// ── observability (P6) ───────────────────────────────────────────────────────
+
+export interface IngestRunRecord {
+  kind: string;
+  status: string;
+  startedAt: string;
+  finishedAt: string | null;
+  counts: Record<string, unknown> | null;
+}
+
+export async function getRecentRuns(limit = 12): Promise<IngestRunRecord[]> {
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from("reddit_ingest_runs")
+    .select("kind, status, started_at, finished_at, counts_json")
+    .order("started_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`getRecentRuns: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    kind: String(r.kind),
+    status: String(r.status),
+    startedAt: String(r.started_at),
+    finishedAt: (r.finished_at as string) ?? null,
+    counts: (r.counts_json as Record<string, unknown>) ?? null,
+  }));
+}
+
+export interface UsageTotals {
+  promptTokens: number;
+  completionTokens: number;
+  calls: number;
+}
+
+export async function getUsageTotals(): Promise<UsageTotals> {
+  const sb = getSupabase();
+  const { data, error } = await sb.from("reddit_llm_usage_totals").select("*").maybeSingle();
+  if (error) throw new Error(`getUsageTotals: ${error.message}`);
+  return {
+    promptTokens: Number(data?.prompt_tokens ?? 0),
+    completionTokens: Number(data?.completion_tokens ?? 0),
+    calls: Number(data?.calls ?? 0),
+  };
+}

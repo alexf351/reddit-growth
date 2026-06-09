@@ -13,7 +13,8 @@
     "score": "tsx src/scripts/score.ts",
     "mine": "tsx src/scripts/mine.ts",
     "rules": "tsx src/scripts/rules.ts",
-    "digest": "tsx src/scripts/digest.ts"
+    "digest": "tsx src/scripts/digest.ts",
+    "pipeline": "tsx src/scripts/pipeline.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.102.0",
