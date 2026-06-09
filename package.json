@@ -1,0 +1,28 @@
+{
+  "name": "iro-reddit-opportunity-finder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Iro — Reddit Opportunity Finder. Read-only, human-in-the-loop tool that finds, scores, and explains Reddit threads worth a genuinely helpful comment.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "ingest:one": "tsx src/scripts/ingest-one.ts"
+  },
+  "dependencies": {
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "dotenv": "^16.4.7",
+    "tailwindcss": "^4.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.0"
+  }
+}
