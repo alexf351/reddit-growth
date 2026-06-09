@@ -39,3 +39,31 @@ export interface RedditComment {
   parentPostId: string;
   parentPostTitle?: string;
 }
+
+export type MentionFit = "helpful_only" | "iro_relevant";
+export type TriageStatus = "new" | "commented" | "dismissed" | "saved";
+
+/** A row of the triage queue (post + score + status), flattened for the UI. */
+export interface TriageItem {
+  postId: string;
+  subreddit: string;
+  title: string;
+  permalink: string;
+  author: string | null;
+  createdUtc: number;
+  numComments: number;
+  postScore: number;
+  locked: boolean;
+  removed: boolean;
+  relevance: number;
+  intent: number;
+  commentability: number;
+  mentionFit: MentionFit;
+  competitorBoost: number;
+  saturationPenalty: number;
+  freshnessBonus: number;
+  total: number;
+  why: string | null;
+  model: string | null;
+  status: TriageStatus;
+}

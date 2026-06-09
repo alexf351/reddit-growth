@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Nav } from "@/components/Nav";
 
 export const metadata: Metadata = {
   title: "Iro — Reddit Opportunity Finder",
@@ -12,7 +13,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <Nav />
+        {children}
+      </body>
     </html>
   );
 }
