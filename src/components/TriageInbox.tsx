@@ -173,6 +173,22 @@ export function TriageInbox({ initialItems }: { initialItems: TriageItem[] }) {
                     {i.promoReplyCount > 0 && (
                       <span className="text-amber-400">{i.promoReplyCount} promo replies</span>
                     )}
+                    <span
+                      className={
+                        i.selfPromoAllowed === true
+                          ? "text-emerald-400"
+                          : i.selfPromoAllowed === false
+                            ? "text-rose-400"
+                            : "text-zinc-600"
+                      }
+                      title="subreddit self-promo rule"
+                    >
+                      {i.selfPromoAllowed === true
+                        ? "promo ok"
+                        : i.selfPromoAllowed === false
+                          ? "promo: strict"
+                          : "promo: unknown"}
+                    </span>
                     {i.status !== "new" && (
                       <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-300">{i.status}</span>
                     )}

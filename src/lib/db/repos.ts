@@ -56,6 +56,10 @@ function rowToTriageItem(r: Row): TriageItem {
       ? (r.competitors_json as { username: string; commentPermalink: string | null }[])
       : [],
     promoReplyCount: Number(r.promo_reply_count ?? 0),
+    selfPromoAllowed:
+      r.self_promo_allowed === null || r.self_promo_allowed === undefined
+        ? null
+        : Boolean(r.self_promo_allowed),
   };
 }
 
@@ -76,6 +80,25 @@ export async function ensureSubreddits(names: string[]): Promise<void> {
     ignoreDuplicates: true,
   });
   if (error) throw new Error(`ensureSubreddits: ${error.message}`);
+}
+
+/** Store a subreddit's self-promo flag + raw rules (P4). Leaves origin intact. */
+export async function upsertSubredditRules(
+  name: string,
+  selfPromoAllowed: boolean | null,
+  rulesJson: unknown,
+): Promise<void> {
+  const sb = getSupabase();
+  const { error } = await sb.from("reddit_subreddits").upsert(
+    {
+      name,
+      self_promo_allowed: selfPromoAllowed,
+      rules_json: rulesJson,
+      rules_fetched_at: new Date().toISOString(),
+    },
+    { onConflict: "name" },
+  );
+  if (error) throw new Error(`upsertSubredditRules: ${error.message}`);
 }
 
 export async function upsertPosts(posts: RedditPost[]): Promise<number> {

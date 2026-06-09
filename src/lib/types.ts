@@ -69,4 +69,6 @@ export interface TriageItem {
   competitorCount: number;
   competitors: { username: string; commentPermalink: string | null }[];
   promoReplyCount: number;
+  /** true = allowed, false = restricted, null = unknown (treat as strict). */
+  selfPromoAllowed: boolean | null;
 }
