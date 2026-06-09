@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "ingest": "tsx src/scripts/ingest.ts",
     "ingest:one": "tsx src/scripts/ingest-one.ts",
-    "score": "tsx src/scripts/score.ts"
+    "score": "tsx src/scripts/score.ts",
+    "mine": "tsx src/scripts/mine.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.102.0",

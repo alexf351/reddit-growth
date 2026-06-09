@@ -1,6 +1,6 @@
 /** Typed Supabase queries. Keep all SQL/table knowledge in this file. */
 import { getSupabase } from "./client";
-import type { RedditPost, TriageItem, TriageStatus } from "@/lib/types";
+import type { RedditComment, RedditPost, TriageItem, TriageStatus } from "@/lib/types";
 import type { ScoreBreakdown } from "@/lib/scoring/score";
 import type { LlmUsage } from "@/lib/llm/provider";
 
@@ -51,6 +51,11 @@ function rowToTriageItem(r: Row): TriageItem {
     why: (r.why as string) ?? null,
     model: (r.model as string) ?? null,
     status: (r.status as TriageStatus) ?? "new",
+    competitorCount: Number(r.competitor_count ?? 0),
+    competitors: Array.isArray(r.competitors_json)
+      ? (r.competitors_json as { username: string; commentPermalink: string | null }[])
+      : [],
+    promoReplyCount: Number(r.promo_reply_count ?? 0),
   };
 }
 
@@ -275,4 +280,304 @@ export async function updateTriageStatus(
   if (error) throw new Error(`updateTriageStatus: ${error.message}`);
   // Commenting means we've engaged — dedup it out of future ingests.
   if (status === "commented") await markEngaged([postId], "triage");
+}
+
+// ── competitor mining (P3) ───────────────────────────────────────────────────
+
+export interface CompetitorRecord {
+  id: string;
+  username: string;
+  label: string;
+  active: boolean;
+  lastMinedAt: string | null;
+  notes: string | null;
+}
+
+export async function ensureCompetitors(
+  list: { username: string; label: string; notes?: string }[],
+): Promise<void> {
+  if (list.length === 0) return;
+  const sb = getSupabase();
+  const rows = list.map((c) => ({
+    username: c.username,
+    label: c.label,
+    notes: c.notes ?? null,
+    origin: "seed" as const,
+  }));
+  const { error } = await sb
+    .from("reddit_competitors")
+    .upsert(rows, { onConflict: "username", ignoreDuplicates: true });
+  if (error) throw new Error(`ensureCompetitors: ${error.message}`);
+}
+
+export async function getActiveCompetitors(): Promise<CompetitorRecord[]> {
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from("reddit_competitors")
+    .select("*")
+    .eq("active", true)
+    .order("username");
+  if (error) throw new Error(`getActiveCompetitors: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    id: String(r.id),
+    username: String(r.username),
+    label: String(r.label),
+    active: Boolean(r.active),
+    lastMinedAt: (r.last_mined_at as string) ?? null,
+    notes: (r.notes as string) ?? null,
+  }));
+}
+
+export async function storeCompetitorComments(
+  competitorId: string,
+  comments: RedditComment[],
+): Promise<number> {
+  if (comments.length === 0) return 0;
+  const sb = getSupabase();
+  const rows = comments.map((c) => ({
+    id: c.id,
+    competitor_id: competitorId,
+    body: c.body,
+    permalink: c.permalink,
+    created_utc: c.createdUtc,
+    score: c.score,
+    parent_post_id: c.parentPostId,
+    parent_title: c.parentPostTitle ?? null,
+    parent_subreddit: c.subreddit,
+    fetched_at: new Date().toISOString(),
+  }));
+  for (const part of chunk(rows, 500)) {
+    const { error } = await sb.from("reddit_competitor_comments").upsert(part, { onConflict: "id" });
+    if (error) throw new Error(`storeCompetitorComments: ${error.message}`);
+  }
+  return rows.length;
+}
+
+export async function linkPostCompetitors(
+  rows: { postId: string; competitorId: string; username: string; commentId: string; commentPermalink: string }[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  const sb = getSupabase();
+  const mapped = rows.map((r) => ({
+    post_id: r.postId,
+    competitor_id: r.competitorId,
+    competitor_username: r.username,
+    comment_id: r.commentId,
+    comment_permalink: r.commentPermalink,
+  }));
+  for (const part of chunk(mapped, 500)) {
+    const { error } = await sb
+      .from("reddit_post_competitors")
+      .upsert(part, { onConflict: "post_id,competitor_id" });
+    if (error) throw new Error(`linkPostCompetitors: ${error.message}`);
+  }
+}
+
+export async function setLastMined(competitorId: string): Promise<void> {
+  const sb = getSupabase();
+  const { error } = await sb
+    .from("reddit_competitors")
+    .update({ last_mined_at: new Date().toISOString() })
+    .eq("id", competitorId);
+  if (error) throw new Error(`setLastMined: ${error.message}`);
+}
+
+export async function upsertPostSignal(postId: string, promoReplyCount: number): Promise<void> {
+  const sb = getSupabase();
+  const { error } = await sb
+    .from("reddit_post_signals")
+    .upsert(
+      { post_id: postId, promo_reply_count: promoReplyCount, checked_at: new Date().toISOString() },
+      { onConflict: "post_id" },
+    );
+  if (error) throw new Error(`upsertPostSignal: ${error.message}`);
+}
+
+export interface ScoringSignal {
+  competitorPresent: boolean;
+  promoReplyCount: number;
+}
+
+export async function getScoringSignals(ids: string[]): Promise<Map<string, ScoringSignal>> {
+  const map = new Map<string, ScoringSignal>();
+  if (ids.length === 0) return map;
+  const sb = getSupabase();
+  for (const part of chunk(ids, 500)) {
+    const { data: pc, error: e1 } = await sb
+      .from("reddit_post_competitors")
+      .select("post_id")
+      .in("post_id", part);
+    if (e1) throw new Error(`getScoringSignals: ${e1.message}`);
+    for (const r of pc ?? []) {
+      const id = String(r.post_id);
+      map.set(id, { competitorPresent: true, promoReplyCount: map.get(id)?.promoReplyCount ?? 0 });
+    }
+    const { data: sig, error: e2 } = await sb
+      .from("reddit_post_signals")
+      .select("post_id, promo_reply_count")
+      .in("post_id", part);
+    if (e2) throw new Error(`getScoringSignals: ${e2.message}`);
+    for (const r of sig ?? []) {
+      const id = String(r.post_id);
+      const cur = map.get(id) ?? { competitorPresent: false, promoReplyCount: 0 };
+      map.set(id, { ...cur, promoReplyCount: Number(r.promo_reply_count ?? 0) });
+    }
+  }
+  return map;
+}
+
+// ── suggestions (P3) ─────────────────────────────────────────────────────────
+
+export interface SuggestionRecord {
+  id: string;
+  type: "subreddit" | "keyword";
+  value: string;
+  rationale: string | null;
+  status: string;
+  createdAt: string;
+}
+
+export async function insertSuggestions(
+  rows: { type: "subreddit" | "keyword"; value: string; rationale: string; evidence: unknown }[],
+): Promise<number> {
+  if (rows.length === 0) return 0;
+  const sb = getSupabase();
+  const mapped = rows.map((r) => ({
+    type: r.type,
+    value: r.value,
+    rationale: r.rationale,
+    evidence_json: r.evidence,
+  }));
+  // Don't overwrite an already-decided suggestion.
+  const { error } = await sb
+    .from("reddit_suggestions")
+    .upsert(mapped, { onConflict: "type,value", ignoreDuplicates: true });
+  if (error) throw new Error(`insertSuggestions: ${error.message}`);
+  return mapped.length;
+}
+
+export async function getPendingSuggestions(): Promise<SuggestionRecord[]> {
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from("reddit_suggestions")
+    .select("*")
+    .eq("status", "pending")
+    .order("type")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`getPendingSuggestions: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    id: String(r.id),
+    type: r.type as SuggestionRecord["type"],
+    value: String(r.value),
+    rationale: (r.rationale as string) ?? null,
+    status: String(r.status),
+    createdAt: String(r.created_at),
+  }));
+}
+
+export async function getApprovedSuggestionValues(type: "subreddit" | "keyword"): Promise<string[]> {
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from("reddit_suggestions")
+    .select("value")
+    .eq("type", type)
+    .eq("status", "approved");
+  if (error) throw new Error(`getApprovedSuggestionValues: ${error.message}`);
+  return (data ?? []).map((r) => String(r.value));
+}
+
+export async function decideSuggestion(id: string, status: "approved" | "rejected"): Promise<void> {
+  const sb = getSupabase();
+  const { error } = await sb
+    .from("reddit_suggestions")
+    .update({ status, decided_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(`decideSuggestion: ${error.message}`);
+}
+
+// ── competitor intel (P3) ────────────────────────────────────────────────────
+
+export interface SubCount {
+  subreddit: string;
+  count: number;
+}
+
+export interface CompetitorIntel {
+  username: string;
+  label: string;
+  lastMinedAt: string | null;
+  totalComments: number;
+  commentsPerDay: number;
+  medianReplyHours: number | null;
+  subMap: SubCount[];
+  recentThreads: { title: string; subreddit: string; permalink: string }[];
+}
+
+export async function getCompetitorIntel(): Promise<CompetitorIntel[]> {
+  const sb = getSupabase();
+  const comps = await getActiveCompetitors();
+  const out: CompetitorIntel[] = [];
+
+  for (const c of comps) {
+    const { data, error } = await sb
+      .from("reddit_competitor_comments")
+      .select("created_utc, parent_post_id, parent_subreddit, parent_title, permalink")
+      .eq("competitor_id", c.id)
+      .order("created_utc", { ascending: false })
+      .limit(500);
+    if (error) throw new Error(`getCompetitorIntel: ${error.message}`);
+    const rows = data ?? [];
+    const total = rows.length;
+
+    const subCounts = new Map<string, number>();
+    for (const r of rows) {
+      const s = (r.parent_subreddit as string) || "?";
+      subCounts.set(s, (subCounts.get(s) ?? 0) + 1);
+    }
+    const subMap = [...subCounts.entries()]
+      .map(([subreddit, count]) => ({ subreddit, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 12);
+
+    let commentsPerDay = 0;
+    if (total > 1) {
+      const times = rows.map((r) => Number(r.created_utc));
+      const span = (Math.max(...times) - Math.min(...times)) / 86400;
+      commentsPerDay = span > 0 ? total / span : total;
+    }
+
+    // Reply speed: comment age relative to its parent post (where we have it).
+    const parentIds = [...new Set(rows.map((r) => String(r.parent_post_id)))];
+    const created = new Map<string, number>();
+    for (const part of chunk(parentIds, 500)) {
+      const { data: pd } = await sb.from("reddit_posts").select("id, created_utc").in("id", part);
+      for (const p of pd ?? []) created.set(String(p.id), Number(p.created_utc));
+    }
+    const delays: number[] = [];
+    for (const r of rows) {
+      const pc = created.get(String(r.parent_post_id));
+      if (pc) {
+        const d = (Number(r.created_utc) - pc) / 3600;
+        if (d >= 0 && d < 24 * 30) delays.push(d);
+      }
+    }
+    delays.sort((a, b) => a - b);
+    const medianReplyHours = delays.length ? delays[Math.floor(delays.length / 2)] : null;
+
+    out.push({
+      username: c.username,
+      label: c.label,
+      lastMinedAt: c.lastMinedAt,
+      totalComments: total,
+      commentsPerDay: Math.round(commentsPerDay * 10) / 10,
+      medianReplyHours: medianReplyHours != null ? Math.round(medianReplyHours * 10) / 10 : null,
+      subMap,
+      recentThreads: rows.slice(0, 8).map((r) => ({
+        title: (r.parent_title as string) || "(untitled)",
+        subreddit: (r.parent_subreddit as string) || "?",
+        permalink: (r.permalink as string) || "#",
+      })),
+    });
+  }
+  return out;
 }

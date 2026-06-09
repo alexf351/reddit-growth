@@ -154,6 +154,25 @@ export function TriageInbox({ initialItems }: { initialItems: TriageItem[] }) {
                     >
                       {i.mentionFit === "iro_relevant" ? "iro-relevant" : "helpful-only"}
                     </span>
+                    {i.competitorCount > 0 &&
+                      (i.competitors[0]?.commentPermalink ? (
+                        <a
+                          href={i.competitors[0].commentPermalink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded bg-fuchsia-900/40 px-1.5 py-0.5 text-fuchsia-300 hover:bg-fuchsia-900/60"
+                        >
+                          competitor: u/{i.competitors[0].username}
+                          {i.competitorCount > 1 ? ` +${i.competitorCount - 1}` : ""}
+                        </a>
+                      ) : (
+                        <span className="rounded bg-fuchsia-900/40 px-1.5 py-0.5 text-fuchsia-300">
+                          competitor present
+                        </span>
+                      ))}
+                    {i.promoReplyCount > 0 && (
+                      <span className="text-amber-400">{i.promoReplyCount} promo replies</span>
+                    )}
                     {i.status !== "new" && (
                       <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-300">{i.status}</span>
                     )}

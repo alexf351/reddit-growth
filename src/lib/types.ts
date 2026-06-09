@@ -21,7 +21,7 @@ export interface RedditPost {
   over18: boolean;
   locked: boolean;
   removed: boolean;
-  source: "new" | "rising" | "search";
+  source: "new" | "rising" | "search" | "competitor";
   /** Set when source === "search". */
   searchKeyword?: string;
 }
@@ -66,4 +66,7 @@ export interface TriageItem {
   why: string | null;
   model: string | null;
   status: TriageStatus;
+  competitorCount: number;
+  competitors: { username: string; commentPermalink: string | null }[];
+  promoReplyCount: number;
 }

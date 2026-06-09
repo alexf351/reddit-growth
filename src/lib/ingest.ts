@@ -44,8 +44,16 @@ export async function runIngest(): Promise<IngestResult> {
   try {
     const all: RedditPost[] = [];
 
+    // Effective lists = config + human-approved competitor suggestions (P3).
+    const [approvedSubs, approvedKeywords] = await Promise.all([
+      repos.getApprovedSuggestionValues("subreddit"),
+      repos.getApprovedSuggestionValues("keyword"),
+    ]);
+    const subreddits = [...new Set([...targets.subreddits, ...approvedSubs])];
+    const keywords = [...new Set([...targets.keywords, ...approvedKeywords])];
+
     // Subreddit new + rising.
-    for (const sub of targets.subreddits) {
+    for (const sub of subreddits) {
       try {
         const [fresh, rising] = await Promise.all([
           getSubredditPosts(sub, "new", 50),
@@ -58,7 +66,7 @@ export async function runIngest(): Promise<IngestResult> {
     }
 
     // Keyword search across Reddit.
-    for (const kw of targets.keywords) {
+    for (const kw of keywords) {
       try {
         const found = await searchReddit(kw, { limit: 50, sort: "new", t: "week" });
         all.push(...found);
@@ -85,7 +93,7 @@ export async function runIngest(): Promise<IngestResult> {
     const toStore = unique.filter((p) => !engaged.has(p.id));
     const newPosts = toStore.filter((p) => !known.has(p.id)).length;
 
-    await repos.ensureSubreddits(targets.subreddits);
+    await repos.ensureSubreddits(subreddits);
     const stored = await repos.upsertPosts(toStore);
 
     const result: IngestResult = {

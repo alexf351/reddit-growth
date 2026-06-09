@@ -125,3 +125,42 @@ export async function getUserComments(
     .map((c) => normalizeComment(c.data));
   return { comments, after: data.data.after };
 }
+
+/** Page through a user's comment history up to `max` comments. */
+export async function getUserCommentsPaged(username: string, max = 200): Promise<RedditComment[]> {
+  const out: RedditComment[] = [];
+  let after: string | null | undefined;
+  while (out.length < max) {
+    const page = await getUserComments(username, { limit: 100, after: after ?? undefined });
+    out.push(...page.comments);
+    if (!page.after) break;
+    after = page.after;
+  }
+  return out.slice(0, max);
+}
+
+/** Fetch full posts by fullname (t3_...). Batches of up to 100 via /api/info. */
+export async function getPostsByIds(ids: string[]): Promise<RedditPost[]> {
+  const out: RedditPost[] = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    const batch = ids.slice(i, i + 100);
+    const data = await redditGet<RawListing<RawPost>>(`/api/info`, { params: { id: batch.join(",") } });
+    out.push(
+      ...data.data.children.filter((c) => c.kind === "t3").map((c) => normalizePost(c.data, "competitor")),
+    );
+  }
+  return out;
+}
+
+/** Top-level comment bodies for a post (for saturation heuristics). */
+export async function getPostTopComments(shortId: string, limit = 50): Promise<string[]> {
+  // The comments endpoint returns [postListing, commentsListing].
+  const data = await redditGet<[RawListing<RawPost>, RawListing<RawComment>]>(
+    `/comments/${shortId}`,
+    { params: { limit, depth: 1, sort: "top" } },
+  );
+  const commentsListing = data[1];
+  return commentsListing.data.children
+    .filter((c) => c.kind === "t1")
+    .map((c) => c.data.body ?? "");
+}

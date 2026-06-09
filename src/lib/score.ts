@@ -37,10 +37,11 @@ export async function runScoring(limit = 50): Promise<ScoringResult> {
 
   try {
     const posts = await repos.getUnscoredPosts(limit);
+    const signals = await repos.getScoringSignals(posts.map((p) => p.id));
     for (const post of posts) {
       try {
         const { score, usage } = await scorePostWithLlm(post);
-        const breakdown = combineScore(post, score); // competitor/saturation signals arrive in P3
+        const breakdown = combineScore(post, score, signals.get(post.id) ?? {});
         await repos.upsertScore(post.id, breakdown, score.why, usage.model);
         await repos.ensureTriage(post.id);
         await repos.logLlmUsage("score", usage);
