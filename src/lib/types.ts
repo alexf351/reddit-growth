@@ -72,3 +72,13 @@ export interface TriageItem {
   /** true = allowed, false = restricted, null = unknown (treat as strict). */
   selfPromoAllowed: boolean | null;
 }
+
+export interface DraftComment {
+  id: string;
+  postId: string;
+  variant: number;
+  body: string;
+  mentionsIro: boolean;
+  model: string | null;
+  createdAt: string;
+}

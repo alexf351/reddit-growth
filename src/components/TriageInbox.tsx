@@ -200,7 +200,7 @@ export function TriageInbox({ initialItems }: { initialItems: TriageItem[] }) {
                 </div>
               </div>
 
-              <div className="mt-3 flex gap-2 pl-12">
+              <div className="mt-3 flex items-center gap-2 pl-12">
                 {(["commented", "saved", "dismissed"] as TriageStatus[]).map((s) => (
                   <button
                     key={s}
@@ -215,6 +215,12 @@ export function TriageInbox({ initialItems }: { initialItems: TriageItem[] }) {
                     {s === "commented" ? "mark commented" : s === "saved" ? "save" : "dismiss"}
                   </button>
                 ))}
+                <a
+                  href={`/item/${i.postId}`}
+                  className="ml-auto rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-sky-300 hover:bg-zinc-800"
+                >
+                  open / drafts →
+                </a>
               </div>
             </li>
           ))}

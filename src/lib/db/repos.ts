@@ -1,6 +1,12 @@
 /** Typed Supabase queries. Keep all SQL/table knowledge in this file. */
 import { getSupabase } from "./client";
-import type { RedditComment, RedditPost, TriageItem, TriageStatus } from "@/lib/types";
+import type {
+  DraftComment,
+  RedditComment,
+  RedditPost,
+  TriageItem,
+  TriageStatus,
+} from "@/lib/types";
 import type { ScoreBreakdown } from "@/lib/scoring/score";
 import type { LlmUsage } from "@/lib/llm/provider";
 
@@ -603,4 +609,96 @@ export async function getCompetitorIntel(): Promise<CompetitorIntel[]> {
     });
   }
   return out;
+}
+
+// ── drafts (P5) ──────────────────────────────────────────────────────────────
+
+function rowToDraft(r: Row): DraftComment {
+  return {
+    id: String(r.id),
+    postId: String(r.post_id),
+    variant: Number(r.variant ?? 1),
+    body: String(r.body ?? ""),
+    mentionsIro: Boolean(r.mentions_iro),
+    model: (r.model as string) ?? null,
+    createdAt: String(r.created_at),
+  };
+}
+
+export async function getPostById(id: string): Promise<RedditPost | null> {
+  const sb = getSupabase();
+  const { data, error } = await sb.from("reddit_posts").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(`getPostById: ${error.message}`);
+  return data ? rowToPost(data) : null;
+}
+
+/** A single scored queue item (null if the post isn't scored yet). */
+export async function getQueueItem(postId: string): Promise<TriageItem | null> {
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from("reddit_triage_queue")
+    .select("*")
+    .eq("post_id", postId)
+    .maybeSingle();
+  if (error) throw new Error(`getQueueItem: ${error.message}`);
+  return data ? rowToTriageItem(data) : null;
+}
+
+export interface CompetitorCommentLite {
+  username: string;
+  body: string;
+  permalink: string;
+}
+
+export async function getCompetitorCommentsForPost(postId: string): Promise<CompetitorCommentLite[]> {
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from("reddit_competitor_comments")
+    .select("body, permalink, reddit_competitors(username)")
+    .eq("parent_post_id", postId)
+    .limit(10);
+  if (error) throw new Error(`getCompetitorCommentsForPost: ${error.message}`);
+  return (data ?? []).map((r) => {
+    const rel = (r as Row).reddit_competitors as { username?: string } | { username?: string }[] | null;
+    const username = Array.isArray(rel) ? rel[0]?.username : rel?.username;
+    return {
+      username: username ?? "competitor",
+      body: String((r as Row).body ?? ""),
+      permalink: String((r as Row).permalink ?? "#"),
+    };
+  });
+}
+
+export async function insertDrafts(
+  postId: string,
+  drafts: { body: string; mentionsIro: boolean }[],
+  model: string,
+  usage: LlmUsage,
+): Promise<DraftComment[]> {
+  if (drafts.length === 0) return [];
+  const sb = getSupabase();
+  const rows = drafts.map((d, i) => ({
+    post_id: postId,
+    variant: i + 1,
+    body: d.body,
+    mentions_iro: d.mentionsIro,
+    model,
+    // Attribute the (single) LLM call's tokens to the first row.
+    prompt_tokens: i === 0 ? usage.promptTokens : 0,
+    completion_tokens: i === 0 ? usage.completionTokens : 0,
+  }));
+  const { data, error } = await sb.from("reddit_drafts").insert(rows).select("*");
+  if (error) throw new Error(`insertDrafts: ${error.message}`);
+  return (data ?? []).map(rowToDraft);
+}
+
+export async function getDrafts(postId: string): Promise<DraftComment[]> {
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from("reddit_drafts")
+    .select("*")
+    .eq("post_id", postId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`getDrafts: ${error.message}`);
+  return (data ?? []).map(rowToDraft);
 }
