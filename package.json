@@ -13,6 +13,7 @@
     "score": "tsx src/scripts/score.ts",
     "mine": "tsx src/scripts/mine.ts",
     "discover": "tsx src/scripts/discover.ts",
+    "insights": "tsx src/scripts/insights.ts",
     "rules": "tsx src/scripts/rules.ts",
     "digest": "tsx src/scripts/digest.ts",
     "alerts": "tsx src/scripts/alerts.ts",

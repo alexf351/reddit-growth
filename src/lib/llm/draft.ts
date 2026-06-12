@@ -39,24 +39,40 @@ const schema = {
   required: ["drafts"],
 };
 
+export const DRAFT_TONES = ["default", "friendly", "expert", "concise", "story"] as const;
+export type DraftTone = (typeof DRAFT_TONES)[number];
+
+const TONE_GUIDE: Record<DraftTone, string> = {
+  default: "",
+  friendly: "Warm and encouraging, like helping out a friend.",
+  expert: "Confident and specific, show real depth without showing off.",
+  concise: "Tight and skimmable — a few sentences max, lead with the answer.",
+  story: "Open with a quick relevant personal anecdote, then the help.",
+};
+
 export interface DraftRequest {
   title: string;
   body: string;
   subreddit: string;
   mentionFit: "helpful_only" | "iro_relevant";
   competitorComments: string[];
+  tone?: DraftTone;
+  instruction?: string;
 }
 
 export async function generateDrafts(
   req: DraftRequest,
 ): Promise<{ drafts: GeneratedDraft[]; usage: LlmUsage }> {
   const allowIro = req.mentionFit === "iro_relevant";
+  const tone = req.tone && TONE_GUIDE[req.tone] ? TONE_GUIDE[req.tone] : "";
 
   const system =
     `You write Reddit comment drafts for u/${product.handle}. ` +
     `Voice: ${product.voice} ` +
     `Hard rules: answer the person's actual question first and genuinely well; lowercase-casual; ` +
     `no em dashes; no corporate or marketing tone; never a drive-by link. ` +
+    (tone ? `Tone: ${tone} ` : "") +
+    (req.instruction ? `Extra instruction from me: ${req.instruction} ` : "") +
     (allowIro
       ? `You MAY mention ${product.name} in at most ONE draft, only where it genuinely helps, and you MUST disclose it's my own app (e.g. "i built" / "my app"). Context: ${product.description}`
       : `Do NOT mention ${product.name} in any draft.`);

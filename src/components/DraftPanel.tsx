@@ -14,12 +14,18 @@ export function DraftPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [tone, setTone] = useState("default");
+  const [instruction, setInstruction] = useState("");
 
   async function generate() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/items/${postId}/drafts`, { method: "POST" });
+      const res = await fetch(`/api/items/${postId}/drafts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tone, instruction: instruction.trim() || undefined }),
+      });
       const json = (await res.json()) as { ok: boolean; reason?: string; error?: string; drafts?: DraftComment[] };
       if (!json.ok) {
         setError(json.reason ?? json.error ?? "failed to generate");
@@ -46,16 +52,33 @@ export function DraftPanel({
 
   return (
     <div>
-      <div className="mb-3 flex items-center gap-3">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <button
           onClick={generate}
           disabled={loading}
           className="rounded-md border border-sky-700/60 bg-sky-900/30 px-3 py-1.5 text-sm text-sky-200 hover:bg-sky-900/50 disabled:opacity-50"
         >
-          {loading ? "generating…" : drafts.length ? "regenerate drafts" : "generate drafts"}
+          {loading ? "generating…" : drafts.length ? "regenerate" : "generate drafts"}
         </button>
-        <span className="text-xs text-zinc-600">drafts are suggestions you edit — nothing is posted</span>
+        <select
+          value={tone}
+          onChange={(e) => setTone(e.target.value)}
+          className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+        >
+          <option value="default">default tone</option>
+          <option value="friendly">friendly</option>
+          <option value="expert">expert</option>
+          <option value="concise">concise</option>
+          <option value="story">story</option>
+        </select>
+        <input
+          value={instruction}
+          onChange={(e) => setInstruction(e.target.value)}
+          placeholder="optional: refine, e.g. 'mention the free tier'"
+          className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200 placeholder:text-zinc-600"
+        />
       </div>
+      <p className="mb-3 text-xs text-zinc-600">drafts are suggestions you edit — nothing is posted</p>
 
       {error && (
         <p className="mb-3 rounded-md border border-rose-900/50 bg-rose-950/30 px-3 py-2 text-sm text-rose-300">

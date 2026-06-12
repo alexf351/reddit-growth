@@ -752,6 +752,76 @@ export async function getUsageTotals(): Promise<UsageTotals> {
   };
 }
 
+// ── audience insights (P10) ──────────────────────────────────────────────────
+
+export async function getRecentSignalPosts(
+  limit = 150,
+): Promise<{ title: string; permalink: string; category: string | null }[]> {
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from("reddit_triage_queue")
+    .select("title, permalink, category, created_utc")
+    .in("category", ["pain_anger", "solution_request", "advice_request"])
+    .order("created_utc", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`getRecentSignalPosts: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    title: String(r.title),
+    permalink: String(r.permalink),
+    category: (r.category as string) ?? null,
+  }));
+}
+
+export interface InsightRecord {
+  theme: string;
+  summary: string | null;
+  count: number;
+  examples: { title: string; permalink: string }[];
+  batchAt: string;
+}
+
+export async function replaceInsights(
+  themes: { theme: string; summary: string; count: number; examples: { title: string; permalink: string }[] }[],
+): Promise<void> {
+  const sb = getSupabase();
+  // Single-user tool: keep only the latest batch.
+  const { error: delErr } = await sb.from("reddit_insights").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+  if (delErr) throw new Error(`replaceInsights(delete): ${delErr.message}`);
+  if (themes.length === 0) return;
+  const batchAt = new Date().toISOString();
+  const rows = themes.map((t) => ({
+    batch_at: batchAt,
+    theme: t.theme,
+    summary: t.summary,
+    count: t.count,
+    examples_json: t.examples,
+  }));
+  const { error } = await sb.from("reddit_insights").insert(rows);
+  if (error) throw new Error(`replaceInsights(insert): ${error.message}`);
+}
+
+export async function getLatestInsights(): Promise<InsightRecord[]> {
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from("reddit_insights")
+    .select("*")
+    .order("batch_at", { ascending: false })
+    .order("count", { ascending: false })
+    .limit(50);
+  if (error) throw new Error(`getLatestInsights: ${error.message}`);
+  const rows = data ?? [];
+  const latest = rows.length ? String(rows[0].batch_at) : null;
+  return rows
+    .filter((r) => String(r.batch_at) === latest)
+    .map((r) => ({
+      theme: String(r.theme),
+      summary: (r.summary as string) ?? null,
+      count: Number(r.count ?? 0),
+      examples: Array.isArray(r.examples_json) ? (r.examples_json as { title: string; permalink: string }[]) : [],
+      batchAt: String(r.batch_at),
+    }));
+}
+
 // ── real-time alerts + spikes (P9) ───────────────────────────────────────────
 
 export async function getAlertedPostIds(ids: string[]): Promise<Set<string>> {

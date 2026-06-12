@@ -73,8 +73,11 @@ npm run pipeline                # ingest → score → mine
 | `npm run ingest` | Full ingest: subs + keyword search + dedup → Supabase |
 | `npm run score [limit]` | Score unscored posts (relevance/intent/mention-fit) |
 | `npm run mine` | Mine competitor histories → threads + suggestions |
+| `npm run discover` | Discover new relevant subreddits → suggestions |
+| `npm run insights` | Cluster recent posts into audience pain-points/themes |
 | `npm run rules` | Refresh per-subreddit self-promo flags |
 | `npm run digest` | Send the daily Resend digest |
+| `npm run alerts` | Push new high-value opportunities (Telegram/email) |
 | `npm run pipeline` | ingest → score → mine in one go |
 
 ## Configuration
@@ -106,8 +109,29 @@ Every LLM call's token usage is logged to `reddit_llm_usage`; cumulative totals
 show on `/status`. Control spend via `LLM_PROVIDER` / `LLM_MODEL`, the
 `/api/cron/score?limit=` bound, and the cron frequency in `vercel.json`.
 
+## Pro features (P7–P10)
+
+The intelligence layer that makes it worth paying for — stealing the best of
+GummySearch / Syften / Brand24, minus the spammy automation (still 100%
+read-only, human-in-the-loop):
+
+- **Theme + sentiment tagging** — every post auto-classified (solution request,
+  pain/anger, advice request, money talk, …) with sentiment; the inbox gets a
+  clickable category bar with live counts.
+- **Audience discovery** — find new relevant subreddits by topic (LLM-gated),
+  proposed as approvable suggestions with subscriber counts.
+- **Analytics dashboard + CSV export** — funnel, themes, top subreddits,
+  sentiment, 30-day volume, LLM spend; one-click export.
+- **Real-time alerts + spike detection** — the genuinely hot threads pushed
+  instantly to Telegram/email (deduped); subs that are blowing up flagged.
+- **Audience Insights** — recurring pains/requests clustered into themes with
+  counts and example threads ("what does this audience keep asking for").
+- **Reply assistant** — tone presets + refine-by-instruction on every draft.
+
 ## Build phases (all shipped)
 
 P0 scaffold + Reddit OAuth · P1 ingest + storage · P2 scoring + triage inbox ·
 P3 competitor mining + Competitor Intel · P4 self-promo flags + digest ·
-P5 comment drafts · P6 scheduling + polish.
+P5 comment drafts · P6 scheduling + polish · **P7 themes + sentiment + discovery ·
+P8 dashboard + export · P9 real-time alerts + spikes · P10 audience insights +
+reply assistant**.
