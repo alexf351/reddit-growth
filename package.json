@@ -12,6 +12,7 @@
     "ingest:one": "tsx src/scripts/ingest-one.ts",
     "score": "tsx src/scripts/score.ts",
     "mine": "tsx src/scripts/mine.ts",
+    "discover": "tsx src/scripts/discover.ts",
     "rules": "tsx src/scripts/rules.ts",
     "digest": "tsx src/scripts/digest.ts",
     "pipeline": "tsx src/scripts/pipeline.ts"

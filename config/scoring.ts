@@ -7,6 +7,37 @@
  */
 export type MentionFit = "helpful_only" | "iro_relevant";
 
+/**
+ * GummySearch-style post themes — the recurring shapes that signal intent.
+ * `solution_request` / `advice_request` / `pain_anger` are the money categories;
+ * `self_promotion` flags competitor noise; the rest are usually low value.
+ */
+export const POST_CATEGORIES = [
+  "solution_request",
+  "advice_request",
+  "pain_anger",
+  "money_talk",
+  "self_promotion",
+  "news",
+  "idea",
+  "discussion",
+] as const;
+export type PostCategory = (typeof POST_CATEGORIES)[number];
+
+/** Human labels for the UI. */
+export const CATEGORY_LABELS: Record<PostCategory, string> = {
+  solution_request: "solution request",
+  advice_request: "advice request",
+  pain_anger: "pain / anger",
+  money_talk: "money talk",
+  self_promotion: "self-promotion",
+  news: "news",
+  idea: "idea",
+  discussion: "discussion",
+};
+
+export type Sentiment = "negative" | "neutral" | "positive";
+
 export interface ScoringConfig {
   weights: {
     relevance: number;

@@ -7,7 +7,7 @@ import type {
   TriageItem,
   TriageStatus,
 } from "@/lib/types";
-import type { ScoreBreakdown } from "@/lib/scoring/score";
+import type { LlmScore, ScoreBreakdown } from "@/lib/scoring/score";
 import type { LlmUsage } from "@/lib/llm/provider";
 
 type Row = Record<string, unknown>;
@@ -56,6 +56,8 @@ function rowToTriageItem(r: Row): TriageItem {
     total: Number(r.total ?? 0),
     why: (r.why as string) ?? null,
     model: (r.model as string) ?? null,
+    category: (r.category as string) ?? null,
+    sentiment: (r.sentiment as string) ?? null,
     status: (r.status as TriageStatus) ?? "new",
     competitorCount: Number(r.competitor_count ?? 0),
     competitors: Array.isArray(r.competitors_json)
@@ -228,7 +230,7 @@ export async function getUnscoredPosts(limit: number): Promise<RedditPost[]> {
 export async function upsertScore(
   postId: string,
   b: ScoreBreakdown,
-  why: string,
+  llm: Pick<LlmScore, "why" | "category" | "sentiment">,
   model: string,
 ): Promise<void> {
   const sb = getSupabase();
@@ -244,7 +246,9 @@ export async function upsertScore(
       saturation_penalty: b.saturationPenalty,
       freshness_bonus: b.freshnessBonus,
       total: b.total,
-      why,
+      why: llm.why,
+      category: llm.category,
+      sentiment: llm.sentiment,
       model,
       scored_at: new Date().toISOString(),
     },

@@ -65,6 +65,8 @@ export interface TriageItem {
   total: number;
   why: string | null;
   model: string | null;
+  category: string | null;
+  sentiment: string | null;
   status: TriageStatus;
   competitorCount: number;
   competitors: { username: string; commentPermalink: string | null }[];

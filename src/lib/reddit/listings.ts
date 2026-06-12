@@ -111,6 +111,38 @@ export async function searchReddit(
     .map((c) => normalizePost(c.data, "search", query));
 }
 
+interface RawSubreddit {
+  display_name: string;
+  subscribers: number | null;
+  public_description: string;
+  over18: boolean;
+  active_user_count?: number | null;
+}
+
+export interface SubredditHit {
+  name: string;
+  subscribers: number;
+  activeUsers: number | null;
+  description: string;
+  over18: boolean;
+}
+
+/** Search for subreddits by topic (audience discovery). */
+export async function searchSubreddits(query: string, limit = 25): Promise<SubredditHit[]> {
+  const data = await redditGet<RawListing<RawSubreddit>>(`/subreddits/search`, {
+    params: { q: query, limit },
+  });
+  return data.data.children
+    .filter((c) => c.kind === "t5")
+    .map((c) => ({
+      name: c.data.display_name,
+      subscribers: c.data.subscribers ?? 0,
+      activeUsers: c.data.active_user_count ?? null,
+      description: c.data.public_description ?? "",
+      over18: c.data.over18,
+    }));
+}
+
 /** Public comment history for a user (competitor mining + our own dedup). */
 export async function getUserComments(
   username: string,

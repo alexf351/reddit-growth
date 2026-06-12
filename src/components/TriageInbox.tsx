@@ -1,7 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { CATEGORY_LABELS } from "@config/scoring";
 import type { MentionFit, TriageItem, TriageStatus } from "@/lib/types";
+
+function categoryLabel(c: string | null): string {
+  if (!c) return "uncategorized";
+  return (CATEGORY_LABELS as Record<string, string>)[c] ?? c.replace(/_/g, " ");
+}
 
 function formatAge(createdUtc: number): string {
   const hours = (Date.now() / 1000 - createdUtc) / 3600;
@@ -24,6 +30,7 @@ export function TriageInbox({ initialItems }: { initialItems: TriageItem[] }) {
   const [subreddit, setSubreddit] = useState("all");
   const [minScore, setMinScore] = useState(0);
   const [mention, setMention] = useState<MentionFilter>("all");
+  const [category, setCategory] = useState("all");
   const [statusView, setStatusView] = useState<StatusView>("active");
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -32,16 +39,31 @@ export function TriageInbox({ initialItems }: { initialItems: TriageItem[] }) {
     [initialItems],
   );
 
+  // Category counts over the status-visible set (clickable quick filters).
+  const statusVisible = useMemo(
+    () =>
+      items.filter((i) =>
+        statusView === "active" ? i.status === "new" || i.status === "saved" : statusView === "all" ? true : i.status === statusView,
+      ),
+    [items, statusView],
+  );
+  const categoryCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const i of statusVisible) m.set(i.category ?? "uncategorized", (m.get(i.category ?? "uncategorized") ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [statusVisible]);
+
   const filtered = useMemo(() => {
     return items.filter((i) => {
       if (subreddit !== "all" && i.subreddit !== subreddit) return false;
       if (i.total < minScore) return false;
       if (mention !== "all" && i.mentionFit !== mention) return false;
+      if (category !== "all" && (i.category ?? "uncategorized") !== category) return false;
       if (statusView === "active") return i.status === "new" || i.status === "saved";
       if (statusView === "all") return true;
       return i.status === statusView;
     });
-  }, [items, subreddit, minScore, mention, statusView]);
+  }, [items, subreddit, minScore, mention, category, statusView]);
 
   async function setStatus(postId: string, status: TriageStatus) {
     const prev = items;
@@ -63,6 +85,10 @@ export function TriageInbox({ initialItems }: { initialItems: TriageItem[] }) {
 
   const selectCls =
     "rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-200";
+  const chipCls = (active: boolean) =>
+    `rounded-full border px-2.5 py-1 text-xs transition-colors ${
+      active ? "border-sky-600 bg-sky-900/30 text-sky-200" : "border-zinc-700 text-zinc-400 hover:bg-zinc-800"
+    }`;
 
   return (
     <div>
@@ -110,6 +136,23 @@ export function TriageInbox({ initialItems }: { initialItems: TriageItem[] }) {
         <span className="ml-auto text-sm text-zinc-500">{filtered.length} shown</span>
       </div>
 
+      {categoryCounts.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          <button onClick={() => setCategory("all")} className={chipCls(category === "all")}>
+            all <span className="text-zinc-500">{statusVisible.length}</span>
+          </button>
+          {categoryCounts.map(([c, n]) => (
+            <button
+              key={c}
+              onClick={() => setCategory(category === c ? "all" : c)}
+              className={chipCls(category === c)}
+            >
+              {categoryLabel(c)} <span className="opacity-60">{n}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <p className="rounded-lg border border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
           No items match. Run <code className="text-zinc-300">npm run ingest</code> then{" "}
@@ -147,6 +190,16 @@ export function TriageInbox({ initialItems }: { initialItems: TriageItem[] }) {
                     <span>r/{i.subreddit}</span>
                     <span>{formatAge(i.createdUtc)} old</span>
                     <span>{i.numComments} comments</span>
+                    {i.category && (
+                      <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-300">
+                        {categoryLabel(i.category)}
+                      </span>
+                    )}
+                    {i.sentiment && i.sentiment !== "neutral" && (
+                      <span className={i.sentiment === "negative" ? "text-rose-400" : "text-emerald-400"}>
+                        {i.sentiment}
+                      </span>
+                    )}
                     <span
                       className={
                         i.mentionFit === "iro_relevant" ? "text-sky-400" : "text-zinc-500"

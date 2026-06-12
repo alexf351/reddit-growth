@@ -1,10 +1,12 @@
 /** Combine LLM sub-scores + computed signals into a 0–100 score. */
-import { scoringConfig, type MentionFit } from "@config/scoring";
+import { scoringConfig, type MentionFit, type PostCategory, type Sentiment } from "@config/scoring";
 import type { RedditPost } from "@/lib/types";
 
 export interface LlmScore {
   relevance: number; // 0..1
   intent: number; // 0..1
+  category: PostCategory;
+  sentiment: Sentiment;
   mentionFit: MentionFit;
   why: string;
 }

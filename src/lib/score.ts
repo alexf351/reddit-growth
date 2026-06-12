@@ -42,7 +42,7 @@ export async function runScoring(limit = 50): Promise<ScoringResult> {
       try {
         const { score, usage } = await scorePostWithLlm(post);
         const breakdown = combineScore(post, score, signals.get(post.id) ?? {});
-        await repos.upsertScore(post.id, breakdown, score.why, usage.model);
+        await repos.upsertScore(post.id, breakdown, score, usage.model);
         await repos.ensureTriage(post.id);
         await repos.logLlmUsage("score", usage);
         promptTokens += usage.promptTokens;
