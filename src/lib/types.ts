@@ -75,6 +75,12 @@ export interface TriageItem {
   selfPromoAllowed: boolean | null;
 }
 
+export interface Audience {
+  id: string;
+  name: string;
+  subreddits: string[];
+}
+
 export interface DraftComment {
   id: string;
   postId: string;

@@ -1,6 +1,7 @@
 /** Typed Supabase queries. Keep all SQL/table knowledge in this file. */
 import { getSupabase } from "./client";
 import type {
+  Audience,
   DraftComment,
   RedditComment,
   RedditPost,
@@ -750,6 +751,37 @@ export async function getUsageTotals(): Promise<UsageTotals> {
     completionTokens: Number(data?.completion_tokens ?? 0),
     calls: Number(data?.calls ?? 0),
   };
+}
+
+// ── curated audiences (P11) ──────────────────────────────────────────────────
+
+export async function listAudiences(): Promise<Audience[]> {
+  const sb = getSupabase();
+  const { data, error } = await sb.from("reddit_audiences").select("*").order("created_at");
+  if (error) throw new Error(`listAudiences: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    id: String(r.id),
+    name: String(r.name),
+    subreddits: Array.isArray(r.subreddits) ? (r.subreddits as string[]) : [],
+  }));
+}
+
+export async function createAudience(name: string, subreddits: string[]): Promise<Audience> {
+  const sb = getSupabase();
+  const clean = [...new Set(subreddits.map((s) => s.replace(/^\/?r\//i, "").trim()).filter(Boolean))];
+  const { data, error } = await sb
+    .from("reddit_audiences")
+    .insert({ name, subreddits: clean })
+    .select("*")
+    .single();
+  if (error) throw new Error(`createAudience: ${error.message}`);
+  return { id: String(data.id), name: String(data.name), subreddits: clean };
+}
+
+export async function deleteAudience(id: string): Promise<void> {
+  const sb = getSupabase();
+  const { error } = await sb.from("reddit_audiences").delete().eq("id", id);
+  if (error) throw new Error(`deleteAudience: ${error.message}`);
 }
 
 // ── audience insights (P10) ──────────────────────────────────────────────────

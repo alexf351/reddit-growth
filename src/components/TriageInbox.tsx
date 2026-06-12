@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { CATEGORY_LABELS } from "@config/scoring";
-import type { MentionFit, TriageItem, TriageStatus } from "@/lib/types";
+import type { Audience, MentionFit, TriageItem, TriageStatus } from "@/lib/types";
 
 function categoryLabel(c: string | null): string {
   if (!c) return "uncategorized";
@@ -25,14 +25,26 @@ function scoreColor(total: number): string {
 type StatusView = "active" | "all" | TriageStatus;
 type MentionFilter = "all" | MentionFit;
 
-export function TriageInbox({ initialItems }: { initialItems: TriageItem[] }) {
+export function TriageInbox({
+  initialItems,
+  audiences = [],
+}: {
+  initialItems: TriageItem[];
+  audiences?: Audience[];
+}) {
   const [items, setItems] = useState<TriageItem[]>(initialItems);
   const [subreddit, setSubreddit] = useState("all");
   const [minScore, setMinScore] = useState(0);
   const [mention, setMention] = useState<MentionFilter>("all");
   const [category, setCategory] = useState("all");
+  const [audienceId, setAudienceId] = useState("all");
   const [statusView, setStatusView] = useState<StatusView>("active");
   const [busy, setBusy] = useState<string | null>(null);
+
+  const audienceSubs = useMemo(() => {
+    const a = audiences.find((x) => x.id === audienceId);
+    return a ? new Set(a.subreddits.map((s) => s.toLowerCase())) : null;
+  }, [audiences, audienceId]);
 
   const subreddits = useMemo(
     () => [...new Set(initialItems.map((i) => i.subreddit))].sort((a, b) => a.localeCompare(b)),
@@ -42,10 +54,11 @@ export function TriageInbox({ initialItems }: { initialItems: TriageItem[] }) {
   // Category counts over the status-visible set (clickable quick filters).
   const statusVisible = useMemo(
     () =>
-      items.filter((i) =>
-        statusView === "active" ? i.status === "new" || i.status === "saved" : statusView === "all" ? true : i.status === statusView,
-      ),
-    [items, statusView],
+      items.filter((i) => {
+        if (audienceSubs && !audienceSubs.has(i.subreddit.toLowerCase())) return false;
+        return statusView === "active" ? i.status === "new" || i.status === "saved" : statusView === "all" ? true : i.status === statusView;
+      }),
+    [items, statusView, audienceSubs],
   );
   const categoryCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -55,6 +68,7 @@ export function TriageInbox({ initialItems }: { initialItems: TriageItem[] }) {
 
   const filtered = useMemo(() => {
     return items.filter((i) => {
+      if (audienceSubs && !audienceSubs.has(i.subreddit.toLowerCase())) return false;
       if (subreddit !== "all" && i.subreddit !== subreddit) return false;
       if (i.total < minScore) return false;
       if (mention !== "all" && i.mentionFit !== mention) return false;
@@ -63,7 +77,7 @@ export function TriageInbox({ initialItems }: { initialItems: TriageItem[] }) {
       if (statusView === "all") return true;
       return i.status === statusView;
     });
-  }, [items, subreddit, minScore, mention, category, statusView]);
+  }, [items, subreddit, minScore, mention, category, statusView, audienceSubs]);
 
   async function setStatus(postId: string, status: TriageStatus) {
     const prev = items;
@@ -93,6 +107,16 @@ export function TriageInbox({ initialItems }: { initialItems: TriageItem[] }) {
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-center gap-3">
+        {audiences.length > 0 && (
+          <select className={selectCls} value={audienceId} onChange={(e) => setAudienceId(e.target.value)}>
+            <option value="all">all audiences</option>
+            {audiences.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        )}
         <select className={selectCls} value={subreddit} onChange={(e) => setSubreddit(e.target.value)}>
           <option value="all">all subreddits</option>
           {subreddits.map((s) => (

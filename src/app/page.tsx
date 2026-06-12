@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { hasSupabaseCreds } from "@/lib/db/client";
-import { getTriageQueue } from "@/lib/db/repos";
+import { getTriageQueue, listAudiences } from "@/lib/db/repos";
 import { TriageInbox } from "@/components/TriageInbox";
-import type { TriageItem } from "@/lib/types";
+import type { Audience, TriageItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -30,9 +30,10 @@ export default async function Home() {
   }
 
   let items: TriageItem[] = [];
+  let audiences: Audience[] = [];
   let error: string | null = null;
   try {
-    items = await getTriageQueue({ limit: 300 });
+    [items, audiences] = await Promise.all([getTriageQueue({ limit: 300 }), listAudiences()]);
   } catch (err) {
     error = err instanceof Error ? err.message : String(err);
   }
@@ -60,7 +61,7 @@ export default async function Home() {
           <code>supabase/migrations</code>?
         </p>
       ) : (
-        <TriageInbox initialItems={items} />
+        <TriageInbox initialItems={items} audiences={audiences} />
       )}
     </main>
   );
