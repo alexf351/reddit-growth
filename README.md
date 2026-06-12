@@ -94,14 +94,17 @@ Editable lists live in `config/`:
 1. Import the repo into Vercel; add all `.env.local` vars as project env vars
    (set `APP_URL` to the deployment URL and a random `CRON_SECRET`).
 2. Apply `supabase/migrations/` to your Supabase project.
-3. `vercel.json` defines the cron schedule (ingest every 4h, score every 4h,
-   mine daily, rules weekly, digest daily). Vercel sends
+3. `vercel.json` ships a **Hobby-safe** schedule (2 daily crons: ingest +
+   score) so the deploy passes on a free Vercel account. Vercel sends
    `Authorization: Bearer $CRON_SECRET` to the `/api/cron/*` routes.
 
-   > **Plan note:** sub-daily crons and 60s function durations need Vercel
-   > **Pro**. On **Hobby**, reduce to daily crons (and large runs may need the
-   > `?limit=` bound on `/api/cron/score`). You can always run `npm run pipeline`
-   > manually instead.
+   > **Real-time / full automation needs Vercel Pro.** Hobby allows only 2
+   > daily cron jobs and 60s functions. For the full schedule — hourly alerts,
+   > competitor mining, discovery, insights, rules, digest — upgrade to Pro and
+   > swap in the richer config: `cp vercel.pro.json vercel.json`. On Hobby, run
+   > the rest manually (`npm run mine` / `insights` / `alerts` / `digest`) or
+   > hit the `/api/cron/*` routes from an external scheduler (cron-job.org,
+   > GitHub Actions).
 
 ## Cost
 
