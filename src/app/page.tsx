@@ -39,11 +39,19 @@ export default async function Home() {
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
-      <header className="mb-6">
-        <h1 className="text-xl font-semibold tracking-tight">Triage inbox</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Ranked threads worth a comment. You post manually — nothing here is auto-posted.
-        </p>
+      <header className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Triage inbox</h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            Ranked threads worth a comment. You post manually — nothing here is auto-posted.
+          </p>
+        </div>
+        <a
+          href="/api/export/opportunities"
+          className="shrink-0 rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+        >
+          export CSV
+        </a>
       </header>
 
       {error ? (

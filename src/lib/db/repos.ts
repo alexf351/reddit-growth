@@ -9,6 +9,7 @@ import type {
 } from "@/lib/types";
 import type { LlmScore, ScoreBreakdown } from "@/lib/scoring/score";
 import type { LlmUsage } from "@/lib/llm/provider";
+import { scoringConfig } from "@config/scoring";
 
 type Row = Record<string, unknown>;
 
@@ -748,5 +749,67 @@ export async function getUsageTotals(): Promise<UsageTotals> {
     promptTokens: Number(data?.prompt_tokens ?? 0),
     completionTokens: Number(data?.completion_tokens ?? 0),
     calls: Number(data?.calls ?? 0),
+  };
+}
+
+// ── analytics dashboard (P8) ─────────────────────────────────────────────────
+
+export interface DashboardData {
+  totals: {
+    scored: number;
+    queueNew: number;
+    saved: number;
+    commented: number;
+    dismissed: number;
+    highValue: number;
+    competitorPresent: number;
+  };
+  categories: { category: string; n: number; avgTotal: number }[];
+  sentiment: { sentiment: string; n: number }[];
+  subreddits: { subreddit: string; n: number; avgTotal: number; maxTotal: number }[];
+  funnel: { status: string; n: number }[];
+  dailyVolume: { day: string; n: number }[];
+  usage: UsageTotals;
+}
+
+export async function getDashboard(): Promise<DashboardData> {
+  const sb = getSupabase();
+  const [cats, sent, subs, funnelRows, vol, usage] = await Promise.all([
+    sb.from("reddit_dashboard_categories").select("*"),
+    sb.from("reddit_dashboard_sentiment").select("*"),
+    sb.from("reddit_dashboard_subreddits").select("*").limit(12),
+    sb.from("reddit_dashboard_funnel").select("*"),
+    sb.from("reddit_daily_volume").select("*"),
+    getUsageTotals(),
+  ]);
+  for (const r of [cats, sent, subs, funnelRows, vol]) {
+    if (r.error) throw new Error(`getDashboard: ${r.error.message}`);
+  }
+
+  const funnel = (funnelRows.data ?? []).map((r) => ({ status: String(r.status), n: Number(r.n) }));
+  const byStatus = (s: string) => funnel.find((f) => f.status === s)?.n ?? 0;
+  const scored = funnel.reduce((a, f) => a + f.n, 0);
+
+  const [{ count: highValue }, { count: competitorPresent }] = await Promise.all([
+    sb.from("reddit_scores").select("*", { count: "exact", head: true }).gte("total", scoringConfig.thresholds.digestMinScore),
+    sb.from("reddit_triage_queue").select("*", { count: "exact", head: true }).gt("competitor_count", 0),
+  ]);
+
+  return {
+    totals: {
+      scored,
+      queueNew: byStatus("new"),
+      saved: byStatus("saved"),
+      commented: byStatus("commented"),
+      dismissed: byStatus("dismissed"),
+      highValue: highValue ?? 0,
+      competitorPresent: competitorPresent ?? 0,
+    },
+    categories: (cats.data ?? []).map((r) => ({ category: String(r.category), n: Number(r.n), avgTotal: Number(r.avg_total) })),
+    sentiment: (sent.data ?? []).map((r) => ({ sentiment: String(r.sentiment), n: Number(r.n) })),
+    subreddits: (subs.data ?? []).map((r) => ({ subreddit: String(r.subreddit), n: Number(r.n), avgTotal: Number(r.avg_total), maxTotal: Number(r.max_total) })),
+    funnel,
+    dailyVolume: (vol.data ?? []).map((r) => ({ day: String(r.day), n: Number(r.n) })),
+    usage,
   };
 }
