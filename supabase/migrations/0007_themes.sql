@@ -4,7 +4,10 @@
 alter table reddit_scores add column if not exists category text;
 alter table reddit_scores add column if not exists sentiment text;
 
-create or replace view reddit_triage_queue as
+-- DROP + CREATE (not CREATE OR REPLACE): we're inserting category/sentiment
+-- into the column list, and replace-in-place only allows appending columns.
+drop view if exists reddit_triage_queue;
+create view reddit_triage_queue as
   select
     p.id as post_id, p.subreddit, p.title, p.permalink, p.author,
     p.created_utc, p.num_comments, p.score as post_score, p.locked, p.removed,
