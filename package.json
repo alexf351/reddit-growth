@@ -1,0 +1,39 @@
+{
+  "name": "iro-reddit-opportunity-finder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Iro — Reddit Opportunity Finder. Read-only, human-in-the-loop tool that finds, scores, and explains Reddit threads worth a genuinely helpful comment.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "ingest": "tsx src/scripts/ingest.ts",
+    "ingest:one": "tsx src/scripts/ingest-one.ts",
+    "score": "tsx src/scripts/score.ts",
+    "mine": "tsx src/scripts/mine.ts",
+    "discover": "tsx src/scripts/discover.ts",
+    "insights": "tsx src/scripts/insights.ts",
+    "rules": "tsx src/scripts/rules.ts",
+    "digest": "tsx src/scripts/digest.ts",
+    "alerts": "tsx src/scripts/alerts.ts",
+    "pipeline": "tsx src/scripts/pipeline.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.102.0",
+    "@supabase/supabase-js": "^2.108.1",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "dotenv": "^16.4.7",
+    "tailwindcss": "^4.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.0"
+  }
+}
