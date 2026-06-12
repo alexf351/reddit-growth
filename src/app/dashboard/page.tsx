@@ -66,6 +66,21 @@ export default async function DashboardPage() {
         <StatCard label="LLM tokens" value={`${(d.usage.promptTokens + d.usage.completionTokens).toLocaleString()}`} hint={`${d.usage.calls} calls`} />
       </section>
 
+      {d.spikes.length > 0 && (
+        <section className="mb-8 rounded-lg border border-amber-900/40 bg-amber-950/10 p-4">
+          <h2 className="mb-2 text-xs font-medium uppercase tracking-wider text-amber-400">
+            📈 Trending now
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {d.spikes.map((s) => (
+              <span key={s.subreddit} className="rounded-md border border-amber-800/50 px-2 py-1 text-sm text-amber-200">
+                r/{s.subreddit} <span className="text-amber-500/80">{s.today} today · {s.ratio}× baseline</span>
+              </span>
+            ))}
+          </div>
+        </section>
+      )}
+
       <div className="grid gap-8 lg:grid-cols-2">
         <section>
           <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">Funnel</h2>

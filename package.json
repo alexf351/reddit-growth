@@ -15,6 +15,7 @@
     "discover": "tsx src/scripts/discover.ts",
     "rules": "tsx src/scripts/rules.ts",
     "digest": "tsx src/scripts/digest.ts",
+    "alerts": "tsx src/scripts/alerts.ts",
     "pipeline": "tsx src/scripts/pipeline.ts"
   },
   "dependencies": {

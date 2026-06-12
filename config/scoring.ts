@@ -72,6 +72,8 @@ export interface ScoringConfig {
     digestMinScore: number;
     /** Cap on items in the daily digest. */
     digestTopN: number;
+    /** Instant-alert bar — only the genuinely hot ones interrupt you. */
+    alertMinScore: number;
   };
 }
 
@@ -101,5 +103,6 @@ export const scoringConfig: ScoringConfig = {
     queueMinScore: 40,
     digestMinScore: 60,
     digestTopN: 10,
+    alertMinScore: 75,
   },
 };

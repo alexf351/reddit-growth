@@ -752,6 +752,61 @@ export async function getUsageTotals(): Promise<UsageTotals> {
   };
 }
 
+// ── real-time alerts + spikes (P9) ───────────────────────────────────────────
+
+export async function getAlertedPostIds(ids: string[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (ids.length === 0) return out;
+  const sb = getSupabase();
+  for (const part of chunk(ids, 800)) {
+    const { data, error } = await sb.from("reddit_alerts_sent").select("post_id").in("post_id", part);
+    if (error) throw new Error(`getAlertedPostIds: ${error.message}`);
+    for (const r of data ?? []) out.add(String(r.post_id));
+  }
+  return out;
+}
+
+export async function markAlerted(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const sb = getSupabase();
+  const rows = ids.map((post_id) => ({ post_id }));
+  const { error } = await sb.from("reddit_alerts_sent").upsert(rows, { onConflict: "post_id", ignoreDuplicates: true });
+  if (error) throw new Error(`markAlerted: ${error.message}`);
+}
+
+export interface Spike {
+  subreddit: string;
+  today: number;
+  avg: number;
+  ratio: number;
+}
+
+/** Subreddits whose ingest volume today is well above their 14-day baseline. */
+export async function getSpikes(): Promise<Spike[]> {
+  const sb = getSupabase();
+  const { data, error } = await sb.from("reddit_subreddit_daily").select("*");
+  if (error) throw new Error(`getSpikes: ${error.message}`);
+  const today = new Date().toISOString().slice(0, 10);
+  const bySub = new Map<string, { day: string; n: number }[]>();
+  for (const r of data ?? []) {
+    const s = String(r.subreddit);
+    const arr = bySub.get(s) ?? [];
+    arr.push({ day: String(r.day), n: Number(r.n) });
+    bySub.set(s, arr);
+  }
+  const spikes: Spike[] = [];
+  for (const [subreddit, rows] of bySub) {
+    const todayN = rows.find((r) => r.day === today)?.n ?? 0;
+    if (todayN < 5) continue;
+    const prior = rows.filter((r) => r.day !== today);
+    const avg = prior.length ? prior.reduce((a, r) => a + r.n, 0) / prior.length : 0;
+    if (todayN >= 2.5 * Math.max(1, avg)) {
+      spikes.push({ subreddit, today: todayN, avg: Math.round(avg * 10) / 10, ratio: Math.round((todayN / Math.max(1, avg)) * 10) / 10 });
+    }
+  }
+  return spikes.sort((a, b) => b.ratio - a.ratio).slice(0, 8);
+}
+
 // ── analytics dashboard (P8) ─────────────────────────────────────────────────
 
 export interface DashboardData {
@@ -769,17 +824,19 @@ export interface DashboardData {
   subreddits: { subreddit: string; n: number; avgTotal: number; maxTotal: number }[];
   funnel: { status: string; n: number }[];
   dailyVolume: { day: string; n: number }[];
+  spikes: Spike[];
   usage: UsageTotals;
 }
 
 export async function getDashboard(): Promise<DashboardData> {
   const sb = getSupabase();
-  const [cats, sent, subs, funnelRows, vol, usage] = await Promise.all([
+  const [cats, sent, subs, funnelRows, vol, spikes, usage] = await Promise.all([
     sb.from("reddit_dashboard_categories").select("*"),
     sb.from("reddit_dashboard_sentiment").select("*"),
     sb.from("reddit_dashboard_subreddits").select("*").limit(12),
     sb.from("reddit_dashboard_funnel").select("*"),
     sb.from("reddit_daily_volume").select("*"),
+    getSpikes(),
     getUsageTotals(),
   ]);
   for (const r of [cats, sent, subs, funnelRows, vol]) {
@@ -810,6 +867,7 @@ export async function getDashboard(): Promise<DashboardData> {
     subreddits: (subs.data ?? []).map((r) => ({ subreddit: String(r.subreddit), n: Number(r.n), avgTotal: Number(r.avg_total), maxTotal: Number(r.max_total) })),
     funnel,
     dailyVolume: (vol.data ?? []).map((r) => ({ day: String(r.day), n: Number(r.n) })),
+    spikes,
     usage,
   };
 }
